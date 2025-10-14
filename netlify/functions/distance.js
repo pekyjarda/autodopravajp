@@ -1,65 +1,73 @@
 // netlify/functions/distance.js
+
 export default async (req) => {
   try {
-    if (req.httpMethod !== "POST") {
-      return { statusCode: 405, body: "Method Not Allowed" };
+    if (req.method !== 'POST') {
+      return new Response('Method Not Allowed', { status: 405 });
     }
 
-    const { from, to } = JSON.parse(req.body || "{}");
+    const { from, to } = await req.json();
     if (!from || !to) {
-      return { statusCode: 400, body: "Missing from/to" };
+      return new Response(
+        JSON.stringify({ error: 'Chybí pole "from" nebo "to".' }),
+        { status: 400, headers: { 'content-type': 'application/json' } }
+      );
     }
 
-    const apiKey = process.env.ORS_API_KEY; // nastavíš v Netlify
-    const enc = encodeURIComponent;
-
-    // 1) Geocoding FROM
-    const geoFrom = await fetch(
-      `https://api.openrouteservice.org/geocode/search?api_key=${apiKey}&text=${enc(from)}&boundary.country=CZ`
-    ).then(r => r.json());
-
-    // 2) Geocoding TO
-    const geoTo = await fetch(
-      `https://api.openrouteservice.org/geocode/search?api_key=${apiKey}&text=${enc(to)}&boundary.country=CZ`
-    ).then(r => r.json());
-
-    const f0 = geoFrom?.features?.[0]?.geometry?.coordinates;
-    const t0 = geoTo?.features?.[0]?.geometry?.coordinates;
-    if (!f0 || !t0) {
-      return { statusCode: 404, body: "Address not found" };
+    const apiKey = process.env.ORS_API_KEY;
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({ error: 'Chybí ORS_API_KEY v env proměnných.' }),
+        { status: 500, headers: { 'content-type': 'application/json' } }
+      );
     }
 
-    // 3) Directions (driving)
-    const body = {
-      coordinates: [f0, t0],
-      format: "json"
-    };
+    // 1) Geokódování obou adres (vezmeme první hit)
+    async function geocode(text) {
+      const url = new URL('https://api.openrouteservice.org/geocode/search');
+      url.searchParams.set('api_key', apiKey);
+      url.searchParams.set('text', text);
+      url.searchParams.set('size', '1');
 
-    const route = await fetch(
-      "https://api.openrouteservice.org/v2/directions/driving-car",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": apiKey
-        },
-        body: JSON.stringify(body)
-      }
-    ).then(r => r.json());
-
-    const meters = route?.routes?.[0]?.summary?.distance;
-    if (!meters && meters !== 0) {
-      return { statusCode: 500, body: "No route" };
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`Geocode ${text} failed: ${r.status}`);
+      const g = await r.json();
+      const feat = g.features?.[0];
+      if (!feat) throw new Error(`Nenalezeny souřadnice pro: ${text}`);
+      // ORS vrací [lon, lat]
+      const [lon, lat] = feat.geometry.coordinates;
+      return { lon, lat };
     }
 
-    const km = Math.round((meters / 1000) * 10) / 10;
-    return {
-      statusCode: 200,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ km })
-    };
+    const [start, end] = await Promise.all([geocode(from), geocode(to)]);
 
+    // 2) Směrování (driving-car)
+    const routeUrl = 'https://api.openrouteservice.org/v2/directions/driving-car';
+    const r = await fetch(`${routeUrl}?api_key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        coordinates: [
+          [start.lon, start.lat],
+          [end.lon, end.lat]
+        ]
+      })
+    });
+    if (!r.ok) throw new Error(`Directions failed: ${r.status}`);
+    const d = await r.json();
+
+    const meters = d?.routes?.[0]?.summary?.distance ?? 0;
+    const km = Math.round((meters / 1000) * 10) / 10; // 1 desetinné místo
+
+    return new Response(
+      JSON.stringify({ km }),
+      { status: 200, headers: { 'content-type': 'application/json' } }
+    );
   } catch (e) {
-    return { statusCode: 500, body: String(e) };
+    console.error(e);
+    return new Response(
+      JSON.stringify({ error: 'Server error', detail: String(e) }),
+      { status: 500, headers: { 'content-type': 'application/json' } }
+    );
   }
-};
+}
