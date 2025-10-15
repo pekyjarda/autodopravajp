@@ -129,94 +129,127 @@
           <h3>Orientační kalkulačka a poptávka</h3>
           <p class="muted">Vyplňte údaje, systém spočítá orientační cenu. Po odeslání vás budeme kontaktovat s přesnou nabídkou.</p>
 
-          <form name="kalkulacka"
-                id="calc-form"
-                method="POST"
-                action="/dekujeme.html"
-                data-netlify="true"
-                netlify-honeypot="bot-field"
-                accept-charset="utf-8"
-                class="form">
-            <input type="hidden" name="form-name" value="kalkulacka">
-            <input type="hidden" name="from">
-<input type="hidden" name="to">
-<input type="hidden" name="cargo">
-<input type="hidden" name="km">
-<input type="hidden" name="wait">
-            <p class="hidden" style="display:none"><label>Nevyplňujte: <input name="bot-field"></label></p>
+          <form name="poptavka" method="POST" data-netlify="true"
+      action="/dekujeme.html" netlify-honeypot="bot-field" class="form" id="calc-form">
 
-            <div class="grid-2">
-              <div><label>Odkud</label><input id="from" name="from" placeholder="Místo nakládky" required></div>
-              <div><label>Kam</label><input id="to" name="to" placeholder="Místo vykládky" required></div>
-            </div>
+  <!-- Netlify -->
+  <input type="hidden" name="form-name" value="poptavka">
+  <input type="hidden" name="bot-field">
 
-            <div><label>Co vezeme</label><input id="cargo" name="cargo" placeholder="např. nábytek, stavební materiál…" required></div>
+  <!-- seed polí pro Netlify (kvůli CSV) -->
+  <input type="hidden" name="jmeno"><input type="hidden" name="telefon"><input type="hidden" name="email">
+  <input type="hidden" name="from"><input type="hidden" name="to"><input type="hidden" name="cargo">
+  <input type="hidden" name="km"><input type="hidden" name="wait">
 
-            <div class="grid-2">
-              <div><label>Vzdálenost (km)</label><input id="km" name="km" inputmode="decimal" placeholder="např. 120"></div>
-              <div><label>Čekání (hod)</label><input id="wait" name="wait" inputmode="decimal" placeholder="např. 0.5"></div>
-            </div>
+  <!-- Kontakty -->
+  <div class="grid-3">
+    <div><label>Jméno a příjmení</label><input name="jmeno" required placeholder="Vaše jméno"></div>
+    <div><label>Telefon</label><input name="telefon" type="tel" required placeholder="+420 …"></div>
+    <div><label>E-mail</label><input name="email" type="email" required placeholder="vas@email.cz"></div>
+  </div>
 
-            <div class="estimate">
-              <div>
-                <div class="muted small">Orientační cena</div>
-                <div id="estimate" class="est-price">–</div>
-                <div class="muted tiny">výpočet: 11 Kč/km + 220 Kč/h čekání</div>
-              </div>
-            </div>
+  <!-- Trasa -->
+  <div class="grid-2">
+    <div>
+      <label>Odkud</label>
+      <input id="from" name="from" list="from-suggest" placeholder="Místo nakládky" required>
+      <datalist id="from-suggest"></datalist>
+    </div>
+    <div>
+      <label>Kam</label>
+      <input id="to" name="to" list="to-suggest" placeholder="Místo vykládky" required>
+      <datalist id="to-suggest"></datalist>
+    </div>
+  </div>
 
-            <button type="submit" class="button">Odeslat poptávku</button>
-            <p class="tiny muted">Odesláním souhlasíte se zpracováním osobních údajů dle <a href="gdpr.html">GDPR</a>.</p>
-          </form>
+  <div>
+    <label>Co vezeme</label>
+    <input id="cargo" name="cargo" placeholder="např. nábytek, stavební materiál…" required>
+  </div>
+
+  <div class="grid-2">
+    <div><label>Vzdálenost (km)</label><input id="km" name="km" inputmode="decimal" placeholder="např. 120"></div>
+    <div><label>Čekání (hod)</label><input id="wait" name="wait" inputmode="decimal" placeholder="např. 0.5"></div>
+  </div>
+
+  <div class="estimate">
+    <div>
+      <div class="muted small">Orientační cena</div>
+      <div id="estimate" class="est-price">–</div>
+      <div class="muted tiny">výpočet: 11 Kč/km + 220 Kč/h čekání</div>
+    </div>
+  </div>
+
+  <button class="button" type="submit">Odeslat poptávku</button>
+  <p class="tiny muted">Odesláním souhlasíte se zpracováním osobních údajů dle <a href="/gdpr.html">GDPR</a>.</p>
+</form>
 
           <!-- Kalkulačka + auto-distance -->
-          <script>
-          (function(){
-            const pricePerKm = 11, waitPerHour = 220;
-            const fromEl = document.getElementById('from');
-            const toEl = document.getElementById('to');
-            const kmEl = document.getElementById('km');
-            const waitEl = document.getElementById('wait');
-            const estimateEl = document.getElementById('estimate');
+         <script>
+(() => {
+  const pricePerKm = 11, waitPerHour = 220;
 
-            const parseNum = v => parseFloat((v||"").replace(',', '.')) || 0;
-            const fmt = n => new Intl.NumberFormat('cs-CZ', { style:'currency', currency:'CZK', maximumFractionDigits:0 }).format(n);
+  const el = id => document.getElementById(id);
+  const fromEl = el('from'), toEl = el('to'), kmEl = el('km'), waitEl = el('wait'), estEl = el('estimate');
 
-            function recalc(){
-              const km = parseNum(kmEl.value);
-              const wait = parseNum(waitEl.value);
-              const total = km * pricePerKm + wait * waitPerHour;
-              estimateEl.textContent = total > 0 ? fmt(total) : '–';
-            }
-            kmEl.addEventListener('input', recalc);
-            waitEl.addEventListener('input', recalc);
+  const parseNum = v => parseFloat((v||"").replace(',', '.')) || 0;
+  const fmt = n => new Intl.NumberFormat('cs-CZ',{style:'currency',currency:'CZK',maximumFractionDigits:0}).format(n);
 
-            async function autoDistance(){
-              const from = fromEl.value.trim(), to = toEl.value.trim();
-              if(!from || !to) return;
-              estimateEl.textContent = 'Počítám…';
-              try{
-                const res = await fetch('/.netlify/functions/distance', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ from, to })
-                });
-                if(!res.ok) throw new Error('Chyba při získávání vzdálenosti');
-                const data = await res.json();
-                kmEl.value = data.km;
-                recalc();
-              }catch(e){
-                estimateEl.textContent = 'Nelze spočítat trasu';
-                console.warn(e);
-              }
-            }
-            let t;
-            [fromEl, toEl].forEach(el=>{
-              el.addEventListener('input', ()=>{ clearTimeout(t); t=setTimeout(autoDistance,800); });
-              el.addEventListener('blur', autoDistance);
-            });
-          })();
-          </script>
+  function recalc(){
+    const km = parseNum(kmEl.value), wait = parseNum(waitEl.value);
+    const total = km*pricePerKm + wait*waitPerHour;
+    estEl.textContent = total>0 ? fmt(total) : '–';
+  }
+  kmEl.addEventListener('input', recalc);
+  waitEl.addEventListener('input', recalc);
+
+  async function autoDistance(){
+    const from = fromEl.value.trim(), to = toEl.value.trim();
+    if(!from || !to) return;
+    estEl.textContent = 'Počítám…';
+    try{
+      const r = await fetch('/.netlify/functions/distance',{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ from, to })
+      });
+      const data = await r.json();
+      if(!r.ok || typeof data.km!=='number') throw new Error('route');
+      kmEl.value = data.km;
+      recalc();
+    }catch(e){
+      estEl.textContent = 'Nelze spočítat trasu';
+      console.warn(e);
+    }
+  }
+
+  // debounce
+  let t; [fromEl, toEl].forEach(i=>{
+    i.addEventListener('input', ()=>{
+      clearTimeout(t); t=setTimeout(()=>{ autoDistance(); suggest(i); }, 500);
+    });
+    i.addEventListener('blur', autoDistance);
+  });
+
+  // Našeptávač přes vlastní funkci (chrání klíč)
+  async function suggest(inputEl){
+    const text = inputEl.value.trim();
+    if(text.length<2) return;
+    try{
+      const r = await fetch('/.netlify/functions/geosuggest?text='+encodeURIComponent(text)+'&limit=6');
+      if(!r.ok) return;
+      const data = await r.json();
+      const listId = inputEl.id==='from' ? 'from-suggest' : 'to-suggest';
+      const dl = document.getElementById(listId);
+      dl.innerHTML = '';
+      (data.suggestions||[]).forEach(s=>{
+        const opt = document.createElement('option');
+        opt.value = s.label; dl.appendChild(opt);
+      });
+    }catch(e){ /* ticho */ }
+  }
+})();
+</script>
+
         </div>
 
         <div class="card">
@@ -258,40 +291,61 @@
       </div>
 
       <div class="card">
-        <form name="kontakt"
-              id="contact-form"
-              method="POST"
-              action="/dekujeme.html"
-              data-netlify="true"
-              netlify-honeypot="bot-field"
-              accept-charset="utf-8"
-              class="form">
-          <input type="hidden" name="form-name" value="kontakt">
-          <input type="hidden" name="jmeno">
-<input type="hidden" name="telefon">
-<input type="hidden" name="email">
-<input type="hidden" name="odkud">
-<input type="hidden" name="kam">
-<input type="hidden" name="zprava">
-          <p class="hidden" style="display:none"><label>Nevyplňujte: <input name="bot-field"></label></p>
+       <form name="poptavka" method="POST" data-netlify="true"
+      action="/dekujeme.html" netlify-honeypot="bot-field" class="form" id="calc-form">
 
-          <div><label>Jméno a příjmení</label><input name="jmeno" placeholder="Vaše jméno" required></div>
+  <!-- Netlify -->
+  <input type="hidden" name="form-name" value="poptavka">
+  <input type="hidden" name="bot-field">
 
-          <div class="grid-2">
-            <div><label>Telefon</label><input name="telefon" type="tel" placeholder="+420 ..." required></div>
-            <div><label>E-mail</label><input name="email" type="email" placeholder="vas@email.cz" required></div>
-          </div>
+  <!-- seed polí pro Netlify (kvůli CSV) -->
+  <input type="hidden" name="jmeno"><input type="hidden" name="telefon"><input type="hidden" name="email">
+  <input type="hidden" name="from"><input type="hidden" name="to"><input type="hidden" name="cargo">
+  <input type="hidden" name="km"><input type="hidden" name="wait">
 
-          <div class="grid-2">
-            <div><label>Odkud</label><input name="odkud" placeholder="Místo nakládky"></div>
-            <div><label>Kam</label><input name="kam" placeholder="Místo vykládky"></div>
-          </div>
+  <!-- Kontakty -->
+  <div class="grid-3">
+    <div><label>Jméno a příjmení</label><input name="jmeno" required placeholder="Vaše jméno"></div>
+    <div><label>Telefon</label><input name="telefon" type="tel" required placeholder="+420 …"></div>
+    <div><label>E-mail</label><input name="email" type="email" required placeholder="vas@email.cz"></div>
+  </div>
 
-          <div><label>Popis nákladu & termín</label><textarea name="zprava" rows="4" placeholder="Co převážíme, termín, speciální požadavky..."></textarea></div>
+  <!-- Trasa -->
+  <div class="grid-2">
+    <div>
+      <label>Odkud</label>
+      <input id="from" name="from" list="from-suggest" placeholder="Místo nakládky" required>
+      <datalist id="from-suggest"></datalist>
+    </div>
+    <div>
+      <label>Kam</label>
+      <input id="to" name="to" list="to-suggest" placeholder="Místo vykládky" required>
+      <datalist id="to-suggest"></datalist>
+    </div>
+  </div>
 
-          <button class="button" type="submit">Odeslat poptávku</button>
-          <p class="tiny muted">Odesláním souhlasíte se zpracováním údajů pro účely vyřízení poptávky.</p>
-        </form>
+  <div>
+    <label>Co vezeme</label>
+    <input id="cargo" name="cargo" placeholder="např. nábytek, stavební materiál…" required>
+  </div>
+
+  <div class="grid-2">
+    <div><label>Vzdálenost (km)</label><input id="km" name="km" inputmode="decimal" placeholder="např. 120"></div>
+    <div><label>Čekání (hod)</label><input id="wait" name="wait" inputmode="decimal" placeholder="např. 0.5"></div>
+  </div>
+
+  <div class="estimate">
+    <div>
+      <div class="muted small">Orientační cena</div>
+      <div id="estimate" class="est-price">–</div>
+      <div class="muted tiny">výpočet: 11 Kč/km + 220 Kč/h čekání</div>
+    </div>
+  </div>
+
+  <button class="button" type="submit">Odeslat poptávku</button>
+  <p class="tiny muted">Odesláním souhlasíte se zpracováním osobních údajů dle <a href="/gdpr.html">GDPR</a>.</p>
+</form>
+
       </div>
     </div>
   </section>
